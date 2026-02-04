@@ -1,14 +1,11 @@
 #include "PdfView.h"
 
-#include <QGraphicsEffect>
-#include <QGraphicsPixmapItem>
-#include <QGraphicsScene>
-#include <QGraphicsView>
-
 #include <QPdfDocument>
+#include <QGraphicsScene>
+#include <QGraphicsEffect>
 #include <QWheelEvent>
-#include <QFuture>
-#include <QPointer>
+
+#include "PdfViewPageItem.h"
 
 PdfView::PdfView(QWidget* parent)
     : QGraphicsView(parent)
@@ -28,29 +25,20 @@ void PdfView::setDocument(QPdfDocument* document)
 
     for (int page = 0; page < document->pageCount(); ++page)
     {
-        const auto item = new QGraphicsPixmapItem();
         QSizeF pagePointSize = document->pagePointSize(page);
 
-        // create page
-        QImage pageImage = document->render(page, pagePointSize.toSize());
-        item->setPixmap(QPixmap::fromImage(pageImage));
+        const auto item = new PdfViewPageItem(page, document);
         item->setPos(documentMargins, yCursor);
 
         yCursor += pagePointSize.height() + documentMargins;
         maxPageWidth = std::max(maxPageWidth, pagePointSize.width());
 
-        // create background with shadow effect
-        auto background = new QGraphicsRectItem(item->x(), item->y(), item->boundingRect().width(), item->boundingRect().height(), item); // geom
-
-        background->setBrush(Qt::white);
-        background->setPen(Qt::NoPen);
-        auto shadowEffect = new QGraphicsDropShadowEffect();
+        const auto shadowEffect = new QGraphicsDropShadowEffect();
         shadowEffect->setBlurRadius(10.0);
         shadowEffect->setColor(QColor(0, 0, 0, 150));
         shadowEffect->setOffset(2, 2);
-        background->setGraphicsEffect(shadowEffect);
+        item->setGraphicsEffect(shadowEffect);
 
-        scene->addItem(background);
         scene->addItem(item);
     }
 
