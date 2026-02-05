@@ -19,6 +19,10 @@ QRectF PdfViewPageItem::boundingRect() const
     return QRectF(QPointF(0, 0), _pointSize);
 }
 
+// TODO: move out
+template<class... Ts>
+struct overloads : Ts... { using Ts::operator()...; };
+
 void PdfViewPageItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
 {
     Q_UNUSED(option);
@@ -34,14 +38,20 @@ void PdfViewPageItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* o
     //       ~
     //       Since only the PdfViewPageProvider can answer the question of whether such an operation is appropriate,
     //       this action must occur in complete coordination with the asynchronous render request.
-    //       -
-    // NOTE: This enhancement may be done only after asynchronous render is ready.
-    //       Without this it won't make any sense.
 
-    QFuture<PdfViewPageProvider::ResponseAsync> response = _provider->getRenderAsync(_number, scale);
-    response.then([=, this](const PdfViewPageProvider::ResponseAsync& v){
-        if (const QImage* image = std::get_if<QImage>(&v); image) {
-            painter->drawImage(boundingRect(), *image);
-        }
-    });
+    auto response = _provider->requestRender(_number, scale);
+
+    std::visit(overloads {
+        [&](const PdfViewPageProvider::RenderResponse::Cached& cached)
+        {
+            painter->drawImage(boundingRect(), cached.Image);
+        },
+        [&](PdfViewPageProvider::RenderResponse::Scheduled& scheduled)
+        {
+            if (scheduled.NearestImage)
+                painter->drawImage(boundingRect(), scheduled.NearestImage.value());
+
+            scheduled.Signal.then([this]{ update(); });
+        },
+    }, response);
 }

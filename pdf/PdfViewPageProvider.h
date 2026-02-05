@@ -17,10 +17,21 @@ public:
     void setPixelRatio(qreal ratio);
     void setCacheLimit(qreal bytes) const;
 
-    enum class ResponseAsyncStatus { BadOptions, Cancelled };
-    using ResponseAsync = std::variant<QImage, ResponseAsyncStatus>;
+    struct RenderResponse
+    {
+        struct Cached
+        {
+            QImage Image;
+        };
 
-    QFuture<ResponseAsync> getRenderAsync(int page, qreal scale) const;
+        struct Scheduled
+        {
+            std::optional<QImage> NearestImage;
+            QFuture<void> Signal;
+        };
+    };
+
+    std::variant<RenderResponse::Cached, RenderResponse::Scheduled> requestRender(int page, qreal scale);
 
 private:
     QPdfDocument* _document = nullptr;
@@ -28,4 +39,6 @@ private:
 
     using CacheKey = std::pair<int, qreal>;
     mutable QCache<CacheKey, QImage> _cache;
+
+    mutable QFuture<QImage> _activeRenderRequestJob;
 };
