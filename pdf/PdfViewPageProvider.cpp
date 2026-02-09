@@ -158,7 +158,10 @@ void PdfViewPageProvider::enqueueRenderRequest(RenderRequest&& request)
 
 void PdfViewPageProvider::tryDequeueRenderRequest()
 {
-    // TODO: stop active render if it's not actual now
+    if (_renderState && !isRequesterActual(_renderState->Request.Requester))
+    {
+        _renderState.reset();
+    }
 
     // Erase unactual requests
     const auto firstActualIt = std::find_if(_requests.begin(), _requests.end(), [this](const RenderRequest& request)
