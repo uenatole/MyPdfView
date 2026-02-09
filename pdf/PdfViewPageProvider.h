@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QImage>
 #include <QFuture>
 #include <QGraphicsView>
 
@@ -21,13 +20,7 @@ public:
     void setPixelRatio(qreal ratio);
     void setCacheLimit(qreal bytes) const;
 
-    struct RenderResponse
-    {
-        std::optional<QImage> NearestImage;
-        std::optional<QFuture<void>> RenderTicket;
-    };
-
-    RenderResponse requestRender(const QGraphicsItem* requester, int page, qreal scale);
+    std::optional<QImage> request(QGraphicsItem* requester, int page, qreal scale);
 
 private:
     class RenderCache
@@ -47,49 +40,30 @@ private:
         mutable QHash<int, std::set<qreal>> _keySets;
     };
 
-    struct RenderParameters
+    struct RenderRequest
     {
         int Page;
         qreal Scale;
-        const QGraphicsItem* Requester;
+        QGraphicsItem* Requester;
 
-        bool operator==(const RenderParameters& other) const
+        bool operator==(const RenderRequest& other) const
         {
             return Page == other.Page && qFuzzyCompare(Scale, other.Scale);
         }
     };
 
-    struct RenderRequest
-    {
-        RenderParameters Parameters {};
-        QPromise<QImage> Promise;
-
-        explicit RenderRequest(const RenderParameters& parameters)
-            : Parameters(parameters)
-        {}
-
-        RenderRequest(RenderRequest&& other) noexcept
-        {
-            Parameters = other.Parameters;
-            Promise = std::move(other.Promise);
-        }
-    };
-
     struct RenderState {
-        RenderParameters Parameters;
+        RenderRequest Request;
         QFuture<void> Future;
-        std::unique_ptr<QThread> Thread;
 
-        RenderState(const RenderParameters& parameters, QFuture<void> future, QThread* thread)
-            : Parameters(parameters)
+        RenderState(const RenderRequest& parameters, QFuture<void> future)
+            : Request(parameters)
             , Future(std::move(future))
-            , Thread(thread)
         {}
 
         ~RenderState()
         {
-            Future.cancel();
-            Thread->quit();
+            Future.cancelChain();
         }
     };
 
@@ -97,7 +71,7 @@ private:
 
     std::optional<QImage> findNearestImage(int page, qreal scale);
 
-    QFuture<void> enqueueRenderRequest(RenderRequest&& request);
+    void enqueueRenderRequest(RenderRequest&& request);
     void tryDequeueRenderRequest();
 
     QGraphicsView* _view = nullptr;

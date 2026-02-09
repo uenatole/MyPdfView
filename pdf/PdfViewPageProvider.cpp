@@ -37,26 +37,26 @@ void PdfViewPageProvider::setCacheLimit(const qreal bytes) const
     _cache.setLimit(bytes);
 }
 
-PdfViewPageProvider::RenderResponse PdfViewPageProvider::requestRender(const QGraphicsItem* requester, int page, qreal scale)
+std::optional<QImage> PdfViewPageProvider::request(QGraphicsItem* requester, int page, qreal scale)
 {
     if (const QImage* image = _cache.object(page, scale); image)
     {
         qDebug() << "Cache hit: page =" << page << "scale =" << scale;
-        return RenderResponse { *image };
+        return *image;
     }
 
-    const RenderParameters parameters { page, scale, requester };
+    const RenderRequest parameters { page, scale, requester };
     const std::optional<QImage> nearestImage = findNearestImage(page, scale);
 
     // Check active render request for duplication
     if (_renderState)
     {
-        if (_renderState->Parameters == parameters)
+        if (_renderState->Request == parameters)
         {
-            return RenderResponse { nearestImage };
+            return *nearestImage;
         }
 
-        if (_renderState->Parameters.Page == parameters.Page)
+        if (_renderState->Request.Page == parameters.Page)
         {
             _renderState.reset();
         }
@@ -65,25 +65,22 @@ PdfViewPageProvider::RenderResponse PdfViewPageProvider::requestRender(const QGr
     // Check pending render requests for duplication
     for (RenderRequest& request : _requests)
     {
-        if (request.Parameters.Page == parameters.Page)
+        if (request.Page == parameters.Page)
         {
-            request.Parameters.Scale = parameters.Scale;
-            return RenderResponse { nearestImage };
+            request.Scale = parameters.Scale;
+            return *nearestImage;
         }
     }
 
     // Enqueue new request
-    const auto signal = enqueueRenderRequest(RenderRequest {parameters});
+    enqueueRenderRequest(RenderRequest {parameters});
 
     // Dequeue it immediately to start render
     // TODO: add dequeue delay to prevent from 'zoom spamming' & etc
     if (!_renderState)
         tryDequeueRenderRequest();
 
-    return RenderResponse {
-        .NearestImage = nearestImage,
-        .RenderTicket = signal
-    };
+    return nearestImage;
 }
 
 PdfViewPageProvider::RenderCache::RenderCache()
@@ -154,18 +151,9 @@ std::optional<QImage> PdfViewPageProvider::findNearestImage(int page, qreal scal
     return std::nullopt;
 }
 
-QFuture<void> PdfViewPageProvider::enqueueRenderRequest(RenderRequest&& request)
+void PdfViewPageProvider::enqueueRenderRequest(RenderRequest&& request)
 {
-    const RenderRequest& requestRef = _requests.emplace_back(std::move(request));
-
-    auto chain0 = requestRef.Promise.future();
-    auto chain1 = chain0.then(QThread::currentThread(), [this, parameters=requestRef.Parameters](const QImage& image){
-        (void) _cache.insert(parameters.Page, parameters.Scale, new QImage(image));
-        _renderState.reset();
-        tryDequeueRenderRequest();
-    });
-
-    return chain1;
+    _requests.emplace_back(std::move(request));
 }
 
 void PdfViewPageProvider::tryDequeueRenderRequest()
@@ -175,8 +163,7 @@ void PdfViewPageProvider::tryDequeueRenderRequest()
     // Erase unactual requests
     const auto firstActualIt = std::find_if(_requests.begin(), _requests.end(), [this](const RenderRequest& request)
     {
-        const auto* requester = request.Parameters.Requester;
-        return isRequesterActual(requester);
+        return isRequesterActual(request.Requester);
     });
 
     const auto prevSize = _requests.size();
@@ -190,12 +177,9 @@ void PdfViewPageProvider::tryDequeueRenderRequest()
     RenderRequest request = std::move(_requests.front());
     _requests.pop_front();
 
-    QFuture<void> future = request.Promise.future();
-    QThread* thread = QThread::create(
-        [document=_document, page=request.Parameters.Page, scale=request.Parameters.Scale, ratio=_pixelRatio](QPromise<QImage> promise)
+    QFuture<void> future = QtConcurrent::run(
+        [document=_document, page=request.Page, scale=request.Scale, ratio=_pixelRatio](QPromise<QImage>& promise)
         {
-            promise.start();
-
             struct PromiseCancel : QPdfDocument::ICancel {
                 explicit PromiseCancel(QPromise<QImage>& promise) : m_promise(promise) {}
                 bool isCancelled() final
@@ -221,12 +205,15 @@ void PdfViewPageProvider::tryDequeueRenderRequest()
                 qDebug() << "Render finished: page =" << page << "scale =" << scale << " time =" << timer.elapsed() << "ms";
 
             promise.addResult(result);
-
-            promise.finish();
         }
-        , std::move(request.Promise)
-    );
+    )
+    .then(QThread::currentThread(), [this, request](const QImage& image){
+        (void) _cache.insert(request.Page, request.Scale, new QImage(image));
+        request.Requester->update();
 
-    thread->start();
-    _renderState.emplace(request.Parameters, future, thread);
+        _renderState.reset();
+        tryDequeueRenderRequest();
+    });
+
+    _renderState.emplace(request, future);
 }

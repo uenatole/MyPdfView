@@ -1,8 +1,6 @@
 #include "PdfViewPageItem.h"
 
-#include <QPainter>
 #include <QPdfDocument>
-#include <QWidget>
 
 #include "PdfViewPageProvider.h"
 
@@ -27,11 +25,6 @@ void PdfViewPageItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* o
 
     painter->fillRect(boundingRect(), Qt::white);
 
-    auto [image, ticket] = _provider->requestRender(this, _number, scale);
-
-    if (ticket)
-        ticket->then([this]{ update(); });
-
-    if (image)
+    if (const auto image = _provider->request(this, _number, scale); image)
         painter->drawImage(boundingRect(), *image);
 }
