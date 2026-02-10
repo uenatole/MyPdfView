@@ -41,11 +41,12 @@ void PdfView::setDocument(QPdfDocument* document)
         yCursor += pagePointSize.height() + documentMargins;
         maxPageWidth = std::max(maxPageWidth, pagePointSize.width());
 
-        const auto shadowEffect = new QGraphicsDropShadowEffect();
-        shadowEffect->setBlurRadius(10.0);
-        shadowEffect->setColor(QColor(0, 0, 0, 150));
-        shadowEffect->setOffset(2, 2);
-        item->setGraphicsEffect(shadowEffect);
+        // NOTE: According to the performance profiler, this causes large lags when scaling large
+        // const auto shadowEffect = new QGraphicsDropShadowEffect();
+        // shadowEffect->setBlurRadius(10.0);
+        // shadowEffect->setColor(QColor(0, 0, 0, 150));
+        // shadowEffect->setOffset(2, 2);
+        // item->setGraphicsEffect(shadowEffect);
 
         scene->addItem(item);
     }
