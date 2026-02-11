@@ -61,7 +61,7 @@ void PdfView::setDocument(QPdfDocument* document)
     {
         QSizeF pagePointSize = document->pagePointSize(page);
 
-        const auto item = new PdfPageItem(page, m_provider.get());
+        const auto item = new PdfPageItem(m_provider.get(), page);
         item->setPos(documentMargins, yCursor);
 
         yCursor += pagePointSize.height() + documentMargins;

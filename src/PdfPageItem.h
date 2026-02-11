@@ -7,15 +7,14 @@ class PdfPageProvider;
 class PdfPageItem : public QGraphicsItem
 {
 public:
-    PdfPageItem(int number, PdfPageProvider* provider);
+    PdfPageItem(PdfPageProvider* provider, int number);
+    ~PdfPageItem() override;
 
     QRectF boundingRect() const override;
 
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
 
 private:
-    PdfPageProvider* const _provider;
-
-    const int _number;
-    const QSizeF _pointSize;
+    struct Private;
+    std::unique_ptr<Private> d_ptr;
 };
