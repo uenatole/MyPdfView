@@ -13,18 +13,13 @@ struct LineLayoutParser
 
     auto feed(const std::size_t i, const QChar& chr, const QRectF& box) -> void
     {
-        if (chr == '\r') return;        // Only LF "\n" and "\r\n" are valid ("\r" is dropped)
         if (chr == '\n')
         {
-            if (!layout) return;        // Do not store empty lines
-
-            feedChar(i, chr, box);
-            feedWord(i, chr, box);
-            commitLine();
+            flush();
             return;
         }
 
-        if (!layout)
+        if (!layout.has_value())
         {
             layout = LineLayout {
                 .FirstCharIndex = i,
@@ -35,28 +30,57 @@ struct LineLayoutParser
         // TODO: support geometry violation checks to reorder characters
 
         feedChar(i, chr, box);
-        feedWord(i, chr, box);
     }
 
-    auto flush()
+    auto flush() -> void
     {
+        if (!layout) return;
+
         const auto i = layout->FirstCharIndex + layout->Chars.size();
         const auto lastChar = layout->Chars.last();
 
         if (wSpaceSequenceLeft)
-            commitWSpaceSequence(i, lastChar.right());
+            commitWSpaceSequence(i - layout->FirstCharIndex - layout->Chars.size(), lastChar.right());
 
         feedWord(i, ' ', lastChar.translated(lastChar.right(), 0));
+
+        *inserter++ = *layout;
+        layout.reset();
     }
 
 private:
-    auto commitLine() -> void
+    auto feedChar(const std::size_t i, const QChar& chr, const QRectF& box) -> void
     {
-        *inserter++ = *layout;
-        layout.reset();
+        feedWord(i, chr, box);
 
-        assert(!wordLeft.has_value());
-        assert(!wSpaceSequenceLeft.has_value());
+        if (chr.isSpace())
+        {
+            if (!wSpaceSequenceLeft)
+                wSpaceSequenceLeft = layout->Chars.empty()
+                                   ? box.left()
+                                   : layout->Chars.back().right();
+
+            return; // All WSpace characters (excepts \n) are skipped and processed later by commitWSpaceSequence(...)
+        }
+
+        if (wSpaceSequenceLeft)
+            commitWSpaceSequence(i - layout->FirstCharIndex - layout->Chars.size(), box.left());
+
+        feedWord(i, chr, box);
+
+        layout->Chars.emplace_back(box);
+        layout->Geometry |= box;
+
+        // Remove gaps between two sequential characters in line
+        if (Q_LIKELY(layout->Chars.size() > 1))
+        {
+            auto& box_i = *std::prev(layout->Chars.end(), 2);
+            auto& box_j = *std::prev(layout->Chars.end(), 1);
+
+            const auto avg = (box_i.right() + box_j.left()) / 2;
+            box_i.setRight(avg);
+            box_j.setLeft(avg);
+        }
     }
 
     auto commitWSpaceSequence(const std::size_t length, const double WSpaceSeqRight) -> void
@@ -91,47 +115,22 @@ private:
         wSpaceSequenceLeft.reset();
     }
 
-    auto feedChar(const std::size_t i, const QChar& chr, const QRectF& box) -> void
-    {
-        if (chr.isSpace() && Q_LIKELY(chr != '\n'))
-        {
-            if (!wSpaceSequenceLeft)
-                wSpaceSequenceLeft = layout->Chars.empty()
-                                   ? box.left()
-                                   : layout->Chars.back().right();
-
-            return; // All WSpace characters (excepts \n) are skipped and processed later by commitWSpaceSequence(...)
-        }
-
-        if (wSpaceSequenceLeft)
-            commitWSpaceSequence(i - layout->FirstCharIndex - layout->Chars.size(), box.left());
-
-        layout->Chars.emplace_back(box);
-        layout->Geometry |= box;
-
-        // Remove gaps between two sequential characters in line
-        if (Q_LIKELY(layout->Chars.size() > 1))
-        {
-            auto& box_i = *std::prev(layout->Chars.end(), 2);
-            auto& box_j = *std::prev(layout->Chars.end(), 1);
-
-            const auto avg = (box_i.right() + box_j.left()) / 2;
-            box_i.setRight(avg);
-            box_j.setLeft(avg);
-        }
-    }
-
     auto feedWord(const std::size_t, const QChar& chr, const QRectF& box) -> void
     {
-        if (chr.isSpace() && wordLeft)
+        const auto isWord = [](const QChar& c) -> bool
+        {
+            return c.isLetterOrNumber() || c == '_' || c == u'’' || c == '-'; // TODO: append
+        };
+
+        if (isWord(chr) && !wordLeft)
+        {
+            wordLeft = box.left();
+        }
+        else if (!isWord(chr) && wordLeft)
         {
             const double wordRight = layout->Chars.back().right();
             layout->Words.emplace_back(*wordLeft, wordRight);
             wordLeft.reset();
-        }
-        else if (!chr.isSpace() && !wordLeft)
-        {
-            wordLeft = box.left();
         }
     }
 
