@@ -4,9 +4,9 @@
 
 #include <Document/API/DocumentFacade.h>
 
-#include <DocumentView/DocumentView.h>
-#include <DocumentView/DocumentZoomer.h>
-#include <DocumentView/DocumentSelector.h>
+#include <QtDocumentView/DocumentView.h>
+#include <QtDocumentView/DocumentZoomer.h>
+#include <QtDocumentView/DocumentSelector.h>
 
 #include <Document/Pdf/PdfDocument.h>
 

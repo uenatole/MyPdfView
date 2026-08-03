@@ -318,7 +318,7 @@ void DocumentPageItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
     QGraphicsItem::mouseReleaseEvent(event);
 }
 
-void DocumentPageItem::updateLinkHover(QPointF pos)
+void DocumentPageItem::updateLinkHover(const QPointF pos)
 {
     const auto equals = [](const std::optional<DocumentLink>& first, const std::optional<DocumentLink>& second) -> bool
     {
