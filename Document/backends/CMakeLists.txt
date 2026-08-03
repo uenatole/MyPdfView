@@ -1,4 +1,4 @@
-option(BUILD_PDF_BACKEND "Build WebEngine's (Qt::Pdf) based PDF backend" ON)
+option(BUILD_PDF_BACKEND "Build PDFium based PDF backend" ON)
 option(BUILD_OCR_BACKEND "Build OCR backend (with Tesseract engine)" ON)
 
 add_library(DocumentBackends INTERFACE)
