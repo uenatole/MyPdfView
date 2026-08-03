@@ -1,6 +1,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 add_executable(QtDocumentViewer
+    rubrication/DocumentRubricationModel.cpp
+    rubrication/DocumentRubricationModel.h
     main.cpp
 )
 

@@ -23,7 +23,10 @@ public:
     auto textBoxes(int page, int from, int count) const -> QList<QRectF> final;
 
     auto render(int page, qreal scale) const -> QFuture<QImage> final;
+
     auto links(int page) const -> QList<DocumentLink> final;
+
+    auto rubrication() const -> DocumentRubrication final;
 
 private:
     struct Private;

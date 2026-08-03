@@ -154,3 +154,8 @@ auto OcrDocument::links(const int) const -> QList<DocumentLink>
 {
     return {}; // NOTE: ?
 }
+
+auto OcrDocument::rubrication() const -> DocumentRubrication
+{
+    return {}; // NOTE: ?
+}

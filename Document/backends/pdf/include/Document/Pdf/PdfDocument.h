@@ -23,6 +23,8 @@ public:
 
     auto links(int page) const -> QList<DocumentLink> final;
 
+    auto rubrication() const -> DocumentRubrication final;
+
 private:
     struct Private;
     std::unique_ptr<Private> d;

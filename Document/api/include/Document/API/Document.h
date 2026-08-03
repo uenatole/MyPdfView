@@ -5,6 +5,7 @@
 #include <QImage>
 
 #include "DocumentLink.h"
+#include "DocumentRubrication.h"
 
 struct Document
 {
@@ -24,4 +25,6 @@ struct Document
     virtual auto render(int page, qreal scale) const -> QFuture<QImage> = 0;
 
     virtual auto links(int page) const -> QList<DocumentLink> = 0;
+
+    virtual auto rubrication() const -> DocumentRubrication = 0;
 };

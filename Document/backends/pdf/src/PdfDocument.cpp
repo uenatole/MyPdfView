@@ -10,6 +10,8 @@
 
 #include <QPolygonF>
 
+#include <Document/API/DocumentRubrication.h>
+
 namespace
 {
     Q_GLOBAL_STATIC(QRecursiveMutex, pdfiumMutex);
@@ -243,6 +245,75 @@ auto PdfDocument::render(const int page, const qreal scale) const -> QFuture<QIm
     );
 }
 
+namespace
+{
+    auto parse_action(const FPDF_DOCUMENT document,
+                      const FPDF_DEST destination,
+                      const FPDF_ACTION action) -> std::optional<DocumentAction>
+    {
+        switch (FPDFAction_GetType(action))
+        {
+        case PDFACTION_UNSUPPORTED:
+        case PDFACTION_GOTO:
+        {
+            const int destinationPage = FPDFDest_GetDestPageIndex(document, destination);
+            if (destinationPage < 0)
+                return std::nullopt;
+
+            FPDF_BOOL hasX, hasY, hasZoom;
+            FS_FLOAT x, y, zoom;
+
+            if (!FPDFDest_GetLocationInPage(destination, &hasX, &hasY, &hasZoom, &x, &y, &zoom))
+                return std::nullopt;
+
+            const float destinationZoom = hasZoom ? zoom : 1.0;
+            const auto destinationLocation = QPointF(hasX ? x : 0, hasY ? y : 0);
+
+            return JumpDocumentAction {
+                destinationPage,
+                destinationZoom,
+                destinationLocation
+            };
+
+            break;
+        }
+        case PDFACTION_URI:
+        {
+            const unsigned long uriPathLength = FPDFAction_GetURIPath(document, action, nullptr, 0);
+            if (uriPathLength < 1)
+                return std::nullopt;
+
+            QByteArray buffer(static_cast<qlonglong>(uriPathLength), 0);
+            const unsigned long got = FPDFAction_GetURIPath(document, action, buffer.data(), uriPathLength);
+            Q_ASSERT(got == uriPathLength);
+
+            return OpenUrlDocumentAction {
+                QString::fromLatin1(buffer)
+            };
+
+            break;
+        }
+        case PDFACTION_LAUNCH:
+        case PDFACTION_REMOTEGOTO:
+        {
+            const unsigned long filePathLength = FPDFAction_GetFilePath(action, nullptr, 0);
+            if (filePathLength < 1)
+                return std::nullopt;
+
+            QByteArray buffer(static_cast<qlonglong>(filePathLength), 0);
+            const unsigned long got = FPDFAction_GetFilePath(action, buffer.data(), filePathLength);
+            Q_ASSERT(got == filePathLength);
+
+            return OpenUrlDocumentAction {
+                QUrl::fromLocalFile(QString::fromLatin1(buffer))
+            };
+        }
+        default:
+            return std::nullopt;
+        }
+    }
+}
+
 auto PdfDocument::links(const int page) const -> QList<DocumentLink>
 {
     QList<DocumentLink> links;
@@ -299,93 +370,8 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
         const FPDF_DEST destination = FPDFLink_GetDest(d->document, link);
         const FPDF_ACTION action = FPDFLink_GetAction(link);
 
-        switch (FPDFAction_GetType(action))
-        {
-        case PDFACTION_UNSUPPORTED:
-        case PDFACTION_GOTO:
-        {
-            const int destinationPage = FPDFDest_GetDestPageIndex(d->document, destination);
-
-            if (destinationPage < 0)
-            {
-                // NOTE: skip link with invalid destination page
-                continue;
-            }
-
-            FPDF_BOOL hasX, hasY, hasZoom;
-            FS_FLOAT x, y, zoom;
-
-            if (!FPDFDest_GetLocationInPage(destination, &hasX, &hasY, &hasZoom, &x, &y, &zoom))
-            {
-                // NOTE: skip link with invalid date
-                continue;
-            }
-
-            const float destinationZoom = hasZoom ? zoom : 1.0;
-            const auto destinationLocation = QPointF(hasX ? x : 0, hasY ? y : 0);
-
-            links << DocumentLink(
-                page,
-                geometry,
-                JumpDocumentAction {
-                    destinationPage,
-                    destinationZoom,
-                    destinationLocation
-                }
-            );
-
-            break;
-        }
-        case PDFACTION_URI:
-        {
-            const unsigned long uriPathLength = FPDFAction_GetURIPath(d->document, action, nullptr, 0);
-
-            if (uriPathLength < 1)
-            {
-                // NOTE: skip link with bad uri path
-                continue;
-            }
-
-            QByteArray buffer(static_cast<qlonglong>(uriPathLength), 0);
-            const unsigned long got = FPDFAction_GetURIPath(d->document, action, buffer.data(), uriPathLength);
-            Q_ASSERT(got == uriPathLength);
-
-            links << DocumentLink(
-                page,
-                geometry,
-                OpenUrlDocumentAction {
-                    QString::fromLatin1(buffer)
-                }
-            );
-
-            break;
-        }
-        case PDFACTION_LAUNCH:
-        case PDFACTION_REMOTEGOTO:
-        {
-            const unsigned long filePathLength = FPDFAction_GetFilePath(action, nullptr, 0);
-
-            if (filePathLength < 1)
-            {
-                // NOTE: skip link with bad file path
-                continue;
-            }
-
-            QByteArray buffer(static_cast<qlonglong>(filePathLength), 0);
-            const unsigned long got = FPDFAction_GetFilePath(action, buffer.data(), filePathLength);
-            Q_ASSERT(got == filePathLength);
-
-            links << DocumentLink(
-                page,
-                geometry,
-                OpenUrlDocumentAction {
-                    QUrl::fromLocalFile(QString::fromLatin1(buffer))
-                }
-            );
-
-            break;
-        }
-        }
+        if (const auto actionOpt = parse_action(d->document, destination, action); actionOpt.has_value())
+            links << DocumentLink(page, geometry, *actionOpt);
     }
 
     const FPDF_TEXTPAGE text_page = FPDFText_LoadPage(pdf_page);
@@ -439,4 +425,42 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
     FPDF_ClosePage(pdf_page);
 
     return links;
+}
+
+namespace
+{
+    void traverse_bookmarks(const FPDF_DOCUMENT doc, const FPDF_BOOKMARK parent, QList<DocumentRubric>& list)
+    {
+        FPDF_BOOKMARK bookmark = FPDFBookmark_GetFirstChild(doc, parent);
+        while (bookmark != nullptr)
+        {
+            const unsigned long titleLength = FPDFBookmark_GetTitle(bookmark, nullptr, 0);
+            if (titleLength < 1) continue;
+
+            QList<unsigned short> buffer(static_cast<qlonglong>(titleLength), 0);
+            const unsigned long got = FPDFBookmark_GetTitle(bookmark, buffer.data(), titleLength);
+            Q_ASSERT(got == titleLength);
+
+            const auto title = QString::fromUtf16(buffer.data(), static_cast<qsizetype>(got) - 1);
+
+            const auto destination = FPDFBookmark_GetDest(doc, bookmark);
+            const auto action = FPDFBookmark_GetAction(bookmark);
+            const auto actionOpt = parse_action(doc, destination, action);
+
+            DocumentRubric& rubric = list.emplace_back();
+            rubric.Title = title;
+            rubric.Action = actionOpt;
+
+            traverse_bookmarks(doc, bookmark, rubric.Children);
+
+            bookmark = FPDFBookmark_GetNextSibling(doc, bookmark);
+        }
+    }
+}
+
+auto PdfDocument::rubrication() const -> DocumentRubrication
+{
+    DocumentRubrication rubrication;
+    traverse_bookmarks(d->document, nullptr, rubrication.Children);
+    return rubrication;
 }

@@ -1,6 +1,9 @@
 #include <QApplication>
 #include <QShortcut>
 #include <QClipboard>
+#include <QSplitter>
+#include <QTreeView>
+#include <QHeaderView>
 
 #include <Document/API/DocumentFacade.h>
 
@@ -15,6 +18,8 @@
 
 #include <Document/Std/StandardDocumentParser.h>
 #include <Document/Std/StandardDocumentRenderer.h>
+
+#include "rubrication/DocumentRubricationModel.h"
 
 int main(int argc, char** argv)
 {
@@ -47,7 +52,26 @@ int main(int argc, char** argv)
         QGuiApplication::clipboard()->setText(documentView->getSelectedText(), QClipboard::Clipboard);
     });
 
-    documentView->show();
+    const auto rubrication = pdf->rubrication();
+
+    const auto rubricationModel = new DocumentRubricationModel;
+    rubricationModel->setRubrication(rubrication);
+
+    const auto rubricationView = new QTreeView;
+    rubricationView->setModel(rubricationModel);
+    rubricationView->setExpandsOnDoubleClick(false);
+
+    QObject::connect(rubricationView, &QTreeView::clicked, [&](const QModelIndex& index)
+    {
+        if (const auto action = rubricationModel->getAction(index); action.has_value())
+            documentView->execute(action.value());
+    });
+
+    const auto splitter = new QSplitter;
+    splitter->addWidget(rubricationView);
+    splitter->addWidget(documentView);
+
+    splitter->show();
 
     return QApplication::exec();
 }
