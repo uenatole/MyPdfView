@@ -15,12 +15,12 @@ target_include_directories(DocumentBackendPdf
         $<INSTALL_INTERFACE:include>
 )
 
-set(PDFium_DIR 3rdparty/pdfium)
-find_package(PDFium)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+find_package(PDFium REQUIRED)
 
 target_link_libraries(DocumentBackendPdf
     PUBLIC
         Document::API
     PRIVATE
-        pdfium
+        PDFium::PDFium
 )
