@@ -3,6 +3,7 @@ add_library(Document::API ALIAS DocumentAPI)
 
 target_sources(DocumentAPI
     PRIVATE
+        src/DocumentAction.cpp
         src/DocumentLink.cpp
         src/DocumentFacade.cpp
 )

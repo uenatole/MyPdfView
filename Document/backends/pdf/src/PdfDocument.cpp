@@ -327,7 +327,7 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
             links << DocumentLink(
                 page,
                 geometry,
-                DocumentLink::Jump {
+                JumpDocumentAction {
                     destinationPage,
                     destinationZoom,
                     destinationLocation
@@ -353,7 +353,7 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
             links << DocumentLink(
                 page,
                 geometry,
-                DocumentLink::Url {
+                OpenUrlDocumentAction {
                     QString::fromLatin1(buffer)
                 }
             );
@@ -378,7 +378,7 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
             links << DocumentLink(
                 page,
                 geometry,
-                DocumentLink::Url {
+                OpenUrlDocumentAction {
                     QUrl::fromLocalFile(QString::fromLatin1(buffer))
                 }
             );
@@ -426,7 +426,7 @@ auto PdfDocument::links(const int page) const -> QList<DocumentLink>
             links << DocumentLink(
                 page,
                 geometry,
-                DocumentLink::Url {
+                OpenUrlDocumentAction {
                     QString::fromUtf16(buffer.data(), static_cast<qsizetype>(got) - 1)
                 }
             );

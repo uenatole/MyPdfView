@@ -42,12 +42,12 @@ struct PageItemFeedback : DocumentPageItem::Feedback
 
     void linkPressed(const DocumentLink& link) override
     {
-        if (const auto contents = std::get_if<DocumentLink::Url>(&link.contents()); contents)
+        if (const auto openUrl = std::get_if<OpenUrlDocumentAction>(&link.action()); openUrl)
         {
-            QDesktopServices::openUrl(contents->url());
+            QDesktopServices::openUrl(openUrl->url());
         }
 
-        if (const auto contents = std::get_if<DocumentLink::Jump>(&link.contents()); contents)
+        if (const auto contents = std::get_if<JumpDocumentAction>(&link.action()); contents)
         {
             const auto number = contents->destinationPage();
             const auto location = contents->destinationLocation();
