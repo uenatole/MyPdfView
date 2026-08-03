@@ -35,19 +35,19 @@ int main(int argc, char** argv)
     document->setRenderer(renderer);
     document->setParser(parser);
 
-    DocumentView view;
+    const auto documentView = new DocumentView;
+    documentView->setDocument(document);
 
-    DocumentSelector selector(&view);
-    DocumentZoomer zoomer(&view);
+    const auto selector = new DocumentSelector(documentView);
+    const auto zoomer = new DocumentZoomer(documentView);
 
-    const QShortcut copyShortcut(QKeySequence(Qt::CTRL | Qt::Key_C), &view);
+    const QShortcut copyShortcut(QKeySequence(Qt::CTRL | Qt::Key_C), documentView);
     QObject::connect(&copyShortcut, &QShortcut::activated, [&]
     {
-        QGuiApplication::clipboard()->setText(view.getSelectedText(), QClipboard::Clipboard);
+        QGuiApplication::clipboard()->setText(documentView->getSelectedText(), QClipboard::Clipboard);
     });
 
-    view.setDocument(document);
-    view.show();
+    documentView->show();
 
     return QApplication::exec();
 }
