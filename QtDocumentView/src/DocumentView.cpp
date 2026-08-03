@@ -11,13 +11,65 @@
 
 #include "DocumentPageItem.h"
 
+struct DocumentView::Private
+{
+    explicit Private(DocumentView* q)
+        : feedback(make_feedback(q))
+    {}
+
+    const std::unique_ptr<DocumentPageItem::Feedback> feedback;
+
+    std::shared_ptr<DocumentFacade> document;
+    QMap<int, DocumentPageItem*> pages;
+
+private:
+    static auto make_feedback(DocumentView* view) -> std::unique_ptr<DocumentPageItem::Feedback>
+    {
+        struct PageItemFeedback : DocumentPageItem::Feedback
+        {
+            explicit PageItemFeedback(DocumentView* view) : _view(view){}
+
+            void linkPressed(const DocumentLink& link) override
+            {
+                if (const auto openUrl = std::get_if<OpenUrlDocumentAction>(&link.action()); openUrl)
+                {
+                    QDesktopServices::openUrl(openUrl->url());
+                }
+
+                if (const auto contents = std::get_if<JumpDocumentAction>(&link.action()); contents)
+                {
+                    const auto number = contents->destinationPage();
+                    const auto location = contents->destinationLocation();
+                    const auto zoom = contents->destinationZoom();
+
+                    QTransform t = _view->transform();
+                    t.setMatrix(
+                        zoom, t.m12(), t.m13(),
+                        t.m21(), zoom, t.m23(),
+                        t.m31(), t.m32(), t.m33()
+                    );
+
+                    const auto page = _view->d->pages[number];
+                    _view->setTransform(t);
+                    page->ensureVisible({ location, location });
+                }
+            }
+
+        private:
+            DocumentView* const _view;
+        };
+
+        return std::make_unique<PageItemFeedback>(view);
+    }
+};
+
 struct RenderFeedback : DocumentRenderFeedback
 {
     explicit RenderFeedback(DocumentView* view) : _view(view){}
 
     [[nodiscard]] bool isActual(const int page) const final
     {
-        const auto item = _view->page(page);
+        const auto item = _view->d->pages[page];
 
         const QRect portRect = _view->viewport()->rect();
         const QRectF sceneRect = _view->mapToScene(portRect).boundingRect();
@@ -28,7 +80,7 @@ struct RenderFeedback : DocumentRenderFeedback
 
     void imageReady(const int page) const final
     {
-        const auto item = _view->page(page);
+        const auto item = _view->d->pages[page];
         item->update();
     }
 
@@ -36,58 +88,12 @@ private:
     DocumentView* _view;
 };
 
-struct PageItemFeedback : DocumentPageItem::Feedback
-{
-    explicit PageItemFeedback(DocumentView* view) : _view(view){}
-
-    void linkPressed(const DocumentLink& link) override
-    {
-        if (const auto openUrl = std::get_if<OpenUrlDocumentAction>(&link.action()); openUrl)
-        {
-            QDesktopServices::openUrl(openUrl->url());
-        }
-
-        if (const auto contents = std::get_if<JumpDocumentAction>(&link.action()); contents)
-        {
-            const auto number = contents->destinationPage();
-            const auto location = contents->destinationLocation();
-            const auto zoom = contents->destinationZoom();
-
-            QTransform t = _view->transform();
-            t.setMatrix(
-                zoom, t.m12(), t.m13(),
-                t.m21(), zoom, t.m23(),
-                t.m31(), t.m32(), t.m33()
-            );
-
-            const auto page = dynamic_cast<DocumentPageItem*>(_view->page(number));
-            _view->setTransform(t);
-            page->ensureVisible({ location, location });
-        }
-    }
-
-private:
-    DocumentView* const _view;
-};
-
-struct DocumentView::Private
-{
-    explicit Private(DocumentView* q)
-        : feedback(new PageItemFeedback(q))
-    {}
-
-    const std::unique_ptr<DocumentPageItem::Feedback> feedback;
-
-    std::shared_ptr<DocumentFacade> document;
-    QMap<int, DocumentPageItem*> pages;
-};
-
 DocumentView::DocumentView(QWidget* parent)
     : QGraphicsView(parent)
     , d(new Private(this))
 {}
 
-DocumentView::~DocumentView(){}
+DocumentView::~DocumentView() = default;
 
 void DocumentView::setDocument(const std::shared_ptr<DocumentFacade>& document)
 {
@@ -138,9 +144,4 @@ QString DocumentView::getSelectedText() const
         text += dynamic_cast<const DocumentPageItem*>(page)->GetSelectedText();
 
     return text.trimmed();
-}
-
-QGraphicsItem* DocumentView::page(int i) const
-{
-    return d->pages[i];
 }

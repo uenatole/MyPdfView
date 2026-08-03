@@ -18,9 +18,6 @@ public:
 
     QString getSelectedText() const;
 
-    // TODO: remove it
-    QGraphicsItem* page(int) const;
-
 private:
     friend struct RenderFeedback;
     friend struct PageItemFeedback;
