@@ -40,6 +40,7 @@ struct PdfDocument::Private
         int rx, ry;
         if (FPDF_PageToDevice(page, 0, 0, width, height, 0, x, y, &rx, &ry))
             return QPointF(rx, ry);
+        return {};
     }
 
     auto to_view(const FPDF_PAGE page, const int page_index, const QPointF& point) const -> QPointF
