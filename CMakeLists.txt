@@ -7,14 +7,6 @@ set(DOCUMENT_VIEW_DRAW_PAGE_LAYOUT_MARKUP ON CACHE BOOL "" FORCE)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# TODO: get rid of patched Qt::Pdf and use FPDFium directly
-# NOTE: is not needed when BUILD_PDF_BACKEND is OFF, but, unfortunately, will be included anyway.
-set(FEATURE_qtwebengine_build OFF CACHE BOOL "" FORCE)
-set(QT_GENERATE_SBOM OFF CACHE BOOL "" FORCE)
-set(QT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(QT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-add_subdirectory(3rdparty/qtwebengine)
-
 add_subdirectory(Document)
 add_subdirectory(DocumentView)
 

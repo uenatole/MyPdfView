@@ -15,9 +15,12 @@ target_include_directories(DocumentBackendPdf
         $<INSTALL_INTERFACE:include>
 )
 
+set(PDFium_DIR 3rdparty/pdfium)
+find_package(PDFium)
+
 target_link_libraries(DocumentBackendPdf
     PUBLIC
         Document::API
     PRIVATE
-        Qt::Pdf
+        pdfium
 )
