@@ -31,28 +31,7 @@ private:
 
             void linkPressed(const DocumentLink& link) override
             {
-                if (const auto openUrl = std::get_if<OpenUrlDocumentAction>(&link.action()); openUrl)
-                {
-                    QDesktopServices::openUrl(openUrl->url());
-                }
-
-                if (const auto contents = std::get_if<JumpDocumentAction>(&link.action()); contents)
-                {
-                    const auto number = contents->destinationPage();
-                    const auto location = contents->destinationLocation();
-                    const auto zoom = contents->destinationZoom();
-
-                    QTransform t = _view->transform();
-                    t.setMatrix(
-                        zoom, t.m12(), t.m13(),
-                        t.m21(), zoom, t.m23(),
-                        t.m31(), t.m32(), t.m33()
-                    );
-
-                    const auto page = _view->d->pages[number];
-                    _view->setTransform(t);
-                    page->ensureVisible({ location, location });
-                }
+                _view->execute(link.action());
             }
 
         private:
@@ -144,4 +123,30 @@ QString DocumentView::getSelectedText() const
         text += dynamic_cast<const DocumentPageItem*>(page)->GetSelectedText();
 
     return text.trimmed();
+}
+
+void DocumentView::execute(const DocumentAction& action)
+{
+    if (const auto openUrl = std::get_if<OpenUrlDocumentAction>(&action); openUrl)
+    {
+        QDesktopServices::openUrl(openUrl->url());
+    }
+
+    if (const auto jump = std::get_if<JumpDocumentAction>(&action); jump)
+    {
+        const auto number = jump->destinationPage();
+        const auto location = jump->destinationLocation();
+        const auto zoom = jump->destinationZoom();
+
+        QTransform t = this->transform();
+        t.setMatrix(
+            zoom, t.m12(), t.m13(),
+            t.m21(), zoom, t.m23(),
+            t.m31(), t.m32(), t.m33()
+        );
+
+        const auto page = this->d->pages[number];
+        this->setTransform(t);
+        page->ensureVisible({ location, location });
+    }
 }

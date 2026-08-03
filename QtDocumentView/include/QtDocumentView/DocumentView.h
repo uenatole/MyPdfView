@@ -2,6 +2,7 @@
 
 #include <QGraphicsView>
 
+struct DocumentAction;
 class DocumentFacade;
 
 // TODO: hide QGraphicsView
@@ -17,6 +18,8 @@ public:
     using QGraphicsView::setTransformationAnchor;
 
     QString getSelectedText() const;
+
+    void execute(const DocumentAction& action);
 
 private:
     friend struct RenderFeedback;
